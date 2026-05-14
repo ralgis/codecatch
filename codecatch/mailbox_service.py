@@ -51,6 +51,8 @@ async def upsert_mailbox(
     purpose: str = "",
     notes: str = "",
     proxy_url: str | None = None,
+    mode: str = "auto",
+    forwarding_target: str | None = None,
 ) -> UpsertResult:
     address = address.strip().lower()
     if "@" not in address:
@@ -70,14 +72,14 @@ async def upsert_mailbox(
                     """
                     INSERT INTO mailboxes (
                         address, tenant_id, provider_id, is_group,
-                        purpose, notes, headless_proxy_url, status
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+                        purpose, notes, headless_proxy_url, status,
+                        mode, forwarding_target
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
                     """,
                     address, tenant_id, provider_id, is_group,
-                    purpose, notes, proxy_url,
+                    purpose, notes, proxy_url, mode, forwarding_target,
                 )
             else:
-                # Refresh metadata but preserve tenant_id (it's the owner).
                 if existing["tenant_id"] != tenant_id:
                     raise MailboxError("Mailbox belongs to a different tenant")
                 await conn.execute(
@@ -85,10 +87,13 @@ async def upsert_mailbox(
                     UPDATE mailboxes
                     SET provider_id = $2, is_group = $3, purpose = $4, notes = $5,
                         headless_proxy_url = COALESCE($6, headless_proxy_url),
+                        mode = $7,
+                        forwarding_target = COALESCE($8, forwarding_target),
                         updated_at = NOW()
                     WHERE address = $1
                     """,
                     address, provider_id, is_group, purpose, notes, proxy_url,
+                    mode, forwarding_target,
                 )
 
             password_changed = False
@@ -122,11 +127,13 @@ async def upsert_mailbox(
                         await _insert_password(conn, address, password, is_current=True)
                         password_changed = True
 
-            # Provider for strategy decision
             provider = await conn.fetchrow(
                 "SELECT * FROM providers WHERE id = $1", provider_id
             )
-            status, note = await _decide_status(conn, address, tenant_id, provider, has_password=bool(password))
+            status, note = await _decide_status(
+                conn, address, tenant_id, provider,
+                has_password=bool(password), mode=mode,
+            )
             await conn.execute(
                 "UPDATE mailboxes SET status = $2, updated_at = NOW() WHERE address = $1",
                 address, status,
@@ -158,20 +165,20 @@ async def _decide_status(
     tenant_id: int,
     provider: asyncpg.Record | None,
     has_password: bool,
+    mode: str = "auto",
 ) -> tuple[str, str | None]:
     if provider is None:
         return "unknown_provider", "Domain not in providers catalogue"
 
-    # If THIS mailbox is itself a group → it must have direct creds, treat as direct.
     is_group = await conn.fetchval("SELECT is_group FROM mailboxes WHERE address = $1", address)
     if is_group:
+        # Group itself must have direct creds (either basic or OAuth)
         if has_password and provider["auth_kind"] == "basic":
             return "direct_active", "Group inbox — IMAP IDLE will start"
         if provider["auth_kind"] in ("oauth_google", "oauth_microsoft"):
             return "pending_oauth_headless", "Group inbox uses OAuth — queued for consent"
         return "no_path", "Group inbox requires either basic-auth password or OAuth flow"
 
-    # Non-group mailboxes
     has_groups = await conn.fetchval(
         """
         SELECT EXISTS(
@@ -183,17 +190,44 @@ async def _decide_status(
         tenant_id,
     )
     auth = provider["auth_kind"]
+    is_basic = auth == "basic"
+    is_oauth = auth in ("oauth_google", "oauth_microsoft")
 
-    if auth == "basic":
-        if has_password:
-            return "direct_active", "Direct IMAP login pending verification by worker"
+    # Explicit overrides
+    if mode == "group_only":
         if has_groups:
-            return "rely_on_groups", "No password — will rely on group forwarding"
-        return "no_path", "No password and no group inbox configured"
+            return "rely_on_groups", "mode=group_only — using group forwarding"
+        return "no_path", "mode=group_only but no active group inbox"
+
+    if mode == "direct_only":
+        if is_basic and has_password:
+            return "direct_active", "mode=direct_only — direct IMAP login"
+        if is_oauth and has_password:
+            return "pending_oauth_headless", "mode=direct_only — queued for OAuth consent"
+        return "no_path", "mode=direct_only but no usable credentials"
+
+    if mode == "both":
+        # Try direct AND keep group reading. Status reflects the direct attempt;
+        # group is implicit (any active group will pick up codes by To: header).
+        if is_basic and has_password:
+            return "direct_active", "mode=both — direct + group both active"
+        if is_oauth and has_password:
+            return "pending_oauth_headless", "mode=both — OAuth queued, group meanwhile"
+        if has_groups:
+            return "rely_on_groups", "mode=both but no direct creds available"
+        return "no_path", "mode=both but neither direct nor group available"
+
+    # mode == 'auto' — preserve original sensible defaults
+    if is_basic:
+        if has_password:
+            return "direct_active", "auto: basic auth, going direct"
+        if has_groups:
+            return "rely_on_groups", "auto: no password — relying on group"
+        return "no_path", "auto: no password and no group"
 
     # OAuth provider
     if has_groups:
-        return "rely_on_groups", "OAuth provider with groups available — using forwarding"
+        return "rely_on_groups", "auto: OAuth provider with active group — using forwarding"
     if has_password:
-        return "pending_oauth_headless", "OAuth provider — queued for headless consent"
-    return "no_path", "OAuth provider with no password and no group inbox"
+        return "pending_oauth_headless", "auto: OAuth provider — queued for headless consent"
+    return "no_path", "auto: OAuth provider with no password and no group"

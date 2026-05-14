@@ -174,10 +174,18 @@ class OAuthWorker:
 
         context: BrowserContext = await self._browser.new_context()
         page = await context.new_page()
+        debug_saved = False
         try:
             await page.goto(authorize_url, timeout=s.playwright_timeout_sec * 1000)
-            code = await self._drive_login_flow(page, attempt)
+            try:
+                code = await self._drive_login_flow(page, attempt)
+            except Exception:
+                await self._capture_debug(page, attempt.address)
+                debug_saved = True
+                raise
             if code is None:
+                if not debug_saved:
+                    await self._capture_debug(page, attempt.address)
                 raise RuntimeError("Login flow ended without capturing authorization code")
             log.info("oauth_worker.code_captured", address=attempt.address)
         finally:
@@ -204,6 +212,34 @@ class OAuthWorker:
             attempt.address, encrypt(refresh),
         )
         log.info("oauth_worker.oauth_active", address=attempt.address)
+
+    async def _capture_debug(self, page, address: str) -> None:
+        """Save screenshot + page HTML + URL on failure for postmortem.
+        Files land in /app/debug/<address>/<timestamp>.{png,html,txt} so
+        you can `docker cp` them out or mount the dir as a volume.
+        """
+        import os
+        import time
+        try:
+            ts = time.strftime("%Y%m%d-%H%M%S")
+            safe_addr = address.replace("@", "_at_").replace("/", "_")
+            d = f"/app/debug/{safe_addr}"
+            os.makedirs(d, exist_ok=True)
+            await page.screenshot(path=f"{d}/{ts}.png", full_page=True)
+            try:
+                html = await page.content()
+            except Exception:
+                html = "<failed to read page.content>"
+            with open(f"{d}/{ts}.html", "w", encoding="utf-8") as f:
+                f.write(html)
+            with open(f"{d}/{ts}.txt", "w", encoding="utf-8") as f:
+                f.write(f"url: {page.url}\ntitle: {await page.title()}\n")
+            log.warning(
+                "oauth_worker.debug_captured",
+                address=address, dir=d, ts=ts, url=page.url,
+            )
+        except Exception as e:  # noqa: BLE001
+            log.error("oauth_worker.debug_capture_failed", address=address, error=str(e))
 
     async def _drive_login_flow(self, page: Page, attempt: OAuthAttempt) -> str | None:
         """Provider-specific click-through. Returns auth code if captured."""
@@ -243,8 +279,26 @@ class OAuthWorker:
         s = get_settings()
         timeout = s.playwright_timeout_sec * 1000
 
-        # Email step
-        await page.fill('input[type="email"], input[name="loginfmt"]', attempt.address, timeout=timeout)
+        # Microsoft sometimes interleaves a "Verify your email" challenge before
+        # the normal sign-in flow (typically when the IP is suspicious). Detect
+        # it and try to pass it by re-typing the same email.
+        try:
+            proof = page.locator('[data-testid="proof-confirmation-email-input"]')
+            if await proof.count() > 0:
+                log.info("oauth_worker.proof_challenge", address=attempt.address)
+                await proof.first.fill(attempt.address, timeout=15000)
+                await page.click('[data-testid="primaryButton"], button[type="submit"]', timeout=15000)
+                # Wait a moment for next screen to render
+                await asyncio.sleep(2)
+        except PlaywrightTimeoutError:
+            pass
+
+        # Email step (normal sign-in form)
+        await page.fill(
+            'input[type="email"], input[name="loginfmt"]',
+            attempt.address,
+            timeout=timeout,
+        )
         await page.click('input[type="submit"], #idSIButton9', timeout=timeout)
 
         # Password step

@@ -79,6 +79,8 @@ async def mailbox_upsert(
             purpose=body.purpose or "",
             notes=body.notes or "",
             proxy_url=body.proxy_url,
+            mode=body.mode,
+            forwarding_target=body.forwarding_target,
         )
     except MailboxError as e:
         raise HTTPException(
@@ -142,6 +144,29 @@ async def mailbox_get(
         created_at=row["created_at"],
         consent_url=row["oauth_consent_url"],
     )
+
+
+@router.post("/mailboxes/{address}/setup-forwarding")
+async def mailbox_setup_forwarding(
+    request: Request,
+    address: str,
+    key: Annotated[CurrentApiKey, Depends(require_admin_scope_key)],
+):
+    """Drive Playwright to configure outlook.live.com forwarding for this mailbox.
+    Runs synchronously — Playwright session takes 30-90s. Result reflected on
+    the mailbox row (forwarding_probe_status='ok'|'failed')."""
+    from workers.forwarding_setup import configure_for_mailbox
+
+    pool: asyncpg.Pool = request.app.state.db_pool
+    addr = address.lower()
+    mb = await pool.fetchrow(
+        "SELECT 1 FROM mailboxes WHERE address = $1 AND tenant_id = $2",
+        addr, key.tenant_id,
+    )
+    if not mb:
+        raise HTTPException(status_code=404, detail={"error": "not_found", "message": "Mailbox not registered"})
+    result = await configure_for_mailbox(pool, addr)
+    return {"address": addr, "ok": result.ok, "detail": result.detail}
 
 
 @router.delete("/mailboxes/{address}", status_code=204)

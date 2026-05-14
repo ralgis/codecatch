@@ -368,6 +368,18 @@ async def mailbox_delete(
     return RedirectResponse(url="/admin/mailboxes", status_code=303)
 
 
+@router.post("/mailboxes/{address}/setup-forwarding")
+async def mailbox_setup_forwarding_ui(
+    request: Request,
+    admin: Annotated[CurrentAdmin, Depends(require_admin)],
+    address: str,
+):
+    from workers.forwarding_setup import configure_for_mailbox
+    pool = request.app.state.db_pool
+    result = await configure_for_mailbox(pool, address.lower())
+    return {"ok": result.ok, "detail": result.detail}
+
+
 @router.post("/mailboxes/{address}/reveal-password")
 async def mailbox_reveal(
     request: Request,
@@ -604,6 +616,40 @@ async def admin_deactivate(
 
 
 # ─── Extractor patterns + playground ──────────────────────────────────────
+@router.get("/silent", response_class=HTMLResponse)
+async def silent_mailboxes(
+    request: Request,
+    admin: Annotated[CurrentAdmin, Depends(require_admin)],
+):
+    """Mailboxes in rely_on_groups with no codes received recently — likely
+    misconfigured forwarding or banned source account."""
+    pool = request.app.state.db_pool
+    where = ["m.status = 'rely_on_groups'", "m.is_active = TRUE"]
+    args: list[Any] = []
+    if not admin.is_super_admin:
+        args.append(admin.tenant_id)
+        where.append(f"m.tenant_id = ${len(args)}")
+    where_sql = " AND ".join(where)
+    rows = await pool.fetch(
+        f"""
+        SELECT m.address, m.purpose, m.created_at, m.last_code_at,
+               m.last_forwarding_probe_at, m.forwarding_probe_status,
+               m.forwarding_probe_error, m.forwarding_target,
+               p.name AS provider_name,
+               (NOW() - COALESCE(m.last_code_at, m.created_at)) AS quiet_for
+        FROM mailboxes m
+        LEFT JOIN providers p ON m.provider_id = p.id
+        WHERE {where_sql}
+        ORDER BY COALESCE(m.last_code_at, m.created_at) ASC
+        LIMIT 200
+        """,
+        *args,
+    )
+    return templates.TemplateResponse(
+        request, "silent.html", {"admin": admin, "mailboxes": rows}
+    )
+
+
 @router.get("/extractors", response_class=HTMLResponse)
 async def extractors_list(
     request: Request,

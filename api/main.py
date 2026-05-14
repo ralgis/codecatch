@@ -16,6 +16,7 @@ from codecatch.bootstrap import run_bootstrap
 from codecatch.config import get_settings
 from codecatch.db import create_pool
 from codecatch.logging_setup import configure_logging, get_logger
+from codecatch.migrations import run_migrations
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
@@ -32,6 +33,9 @@ async def lifespan(app: FastAPI):
     pool = await create_pool(min_size=2, max_size=10)
     app.state.db_pool = pool
     log.info("startup.db_pool_ready")
+
+    await run_migrations(pool)
+    log.info("startup.migrations_done")
 
     await run_bootstrap(pool)
     log.info("startup.bootstrap_done")

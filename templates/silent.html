@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Silent mailboxes — codecatch{% endblock %}
+{% block content %}
+<h2 class="mb-3">Silent mailboxes</h2>
+<p class="text-muted small">
+  Mailboxes in <code>rely_on_groups</code> status — meaning codecatch expects
+  codes to arrive via forwarding to a group inbox. If forwarding isn't
+  configured (or pointed elsewhere), no codes will ever arrive.
+  Sort: oldest quiet first. Probe column shows result of the periodic
+  active forwarding check (sends test email and waits for it to land).
+</p>
+
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Address</th>
+        <th>Provider</th>
+        <th>Quiet for</th>
+        <th>Last code</th>
+        <th>Probe</th>
+        <th>Probe error</th>
+        <th>Forwarding target</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in mailboxes %}
+      <tr onclick="window.location='/admin/mailboxes/{{ m.address }}'">
+        <td><code>{{ m.address }}</code></td>
+        <td><small>{{ m.provider_name }}</small></td>
+        <td>
+          {% set hours = (m.quiet_for.total_seconds() / 3600) | round(0) %}
+          {% if hours > 168 %}
+            <span class="badge text-bg-danger">{{ (hours/24)|round(0)|int }}d</span>
+          {% elif hours > 48 %}
+            <span class="badge text-bg-warning">{{ hours|int }}h</span>
+          {% else %}
+            <span class="badge text-bg-secondary">{{ hours|int }}h</span>
+          {% endif %}
+        </td>
+        <td><small>{{ m.last_code_at.strftime('%Y-%m-%d %H:%M') if m.last_code_at else '—' }}</small></td>
+        <td>
+          {% if m.forwarding_probe_status == 'ok' %}
+            <span class="badge text-bg-success">ok</span>
+          {% elif m.forwarding_probe_status == 'failed' %}
+            <span class="badge text-bg-danger">failed</span>
+          {% elif m.forwarding_probe_status == 'pending' %}
+            <span class="badge text-bg-warning">pending</span>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+          {% if m.last_forwarding_probe_at %}
+            <small class="text-muted d-block">{{ m.last_forwarding_probe_at.strftime('%m-%d %H:%M') }}</small>
+          {% endif %}
+        </td>
+        <td><small class="text-danger">{{ (m.forwarding_probe_error or '')[:80] }}</small></td>
+        <td><small>{{ m.forwarding_target or '—' }}</small></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted py-4">
+        No silent mailboxes. Either everything's healthy or nothing's registered yet.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -13,6 +13,12 @@ class MailboxUpsertRequest(BaseModel):
     notes: str | None = None
     proxy_url: str | None = Field(None, description="SOCKS5/HTTP proxy for OAuth headless consent (optional)")
     is_group: bool = False
+    mode: str = Field(
+        "auto",
+        pattern="^(auto|direct_only|group_only|both)$",
+        description="auto (default), direct_only, group_only, both",
+    )
+    forwarding_target: str | None = Field(None, description="Where this address forwards (documentation only)")
 
 
 class MailboxResponse(BaseModel):

@@ -1,6 +1,6 @@
 # codecatch workers container — IMAP IDLE + OAuth headless consent (Playwright).
 # Larger image (~700MB) due to Chromium bundled with Playwright.
-FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy AS base
+FROM mcr.microsoft.com/playwright/python:v1.59.0-jammy AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

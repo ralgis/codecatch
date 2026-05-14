@@ -50,6 +50,8 @@ services:
     image: ghcr.io/ralgis/codecatch-workers:latest
     container_name: codecatch_workers
     restart: unless-stopped
+    volumes:
+      - ./debug:/app/debug         # screenshots + HTML dumps from failed OAuth flows
     depends_on:
       postgres:
         condition: service_healthy

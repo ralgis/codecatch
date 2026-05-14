@@ -7,7 +7,9 @@ import signal
 from codecatch.config import get_settings
 from codecatch.db import create_pool
 from codecatch.logging_setup import configure_logging, get_logger
+from workers.forwarding_probe import ForwardingProbeWorker
 from workers.imap_worker import ImapWorkerManager
+from workers.oauth_refresh import OAuthRefresher
 from workers.oauth_worker import OAuthWorker
 
 
@@ -21,6 +23,8 @@ async def amain() -> None:
 
     imap = ImapWorkerManager(pool, max_workers=s.max_imap_workers)
     oauth = OAuthWorker(pool)
+    oauth_refresh = OAuthRefresher(pool)
+    probe = ForwardingProbeWorker(pool)
 
     shutdown = asyncio.Event()
     loop = asyncio.get_running_loop()
@@ -34,6 +38,8 @@ async def amain() -> None:
     tasks = [
         asyncio.create_task(imap.run(), name="imap_manager"),
         asyncio.create_task(oauth.run(), name="oauth_worker"),
+        asyncio.create_task(oauth_refresh.run(), name="oauth_refresh"),
+        asyncio.create_task(probe.run(), name="forwarding_probe"),
     ]
 
     await shutdown.wait()
@@ -41,6 +47,8 @@ async def amain() -> None:
 
     await imap.stop()
     await oauth.stop()
+    await oauth_refresh.stop()
+    await probe.stop()
 
     await asyncio.gather(*tasks, return_exceptions=True)
     await pool.close()

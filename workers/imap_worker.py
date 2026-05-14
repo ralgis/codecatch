@@ -42,7 +42,9 @@ class MailboxConfig:
     provider_host: str
     provider_port: int
     provider_ssl: bool
-    password: str
+    auth_kind: str           # 'basic' | 'oauth_google' | 'oauth_microsoft'
+    password: str | None      # for basic
+    access_token: str | None  # for OAuth (XOAUTH2)
     is_group: bool = False
 
 
@@ -92,6 +94,7 @@ class ImapWorkerManager:
             """
             SELECT
                 m.address, m.is_group, m.is_active, m.status, m.imap_worker_enabled,
+                m.oauth_access_token_encrypted, m.oauth_access_token_expires_at,
                 p.imap_host, p.imap_port, p.imap_ssl, p.auth_kind,
                 mp.password_encrypted
             FROM mailboxes m
@@ -99,9 +102,11 @@ class ImapWorkerManager:
             LEFT JOIN mailbox_passwords mp ON mp.mailbox_address = m.address AND mp.is_current = TRUE
             WHERE m.is_active = TRUE
               AND m.imap_worker_enabled = TRUE
-              AND p.auth_kind = 'basic'
-              AND m.status = 'direct_active'
-              AND mp.password_encrypted IS NOT NULL
+              AND (
+                (p.auth_kind = 'basic'             AND m.status = 'direct_active' AND mp.password_encrypted IS NOT NULL)
+                OR
+                (p.auth_kind IN ('oauth_google','oauth_microsoft') AND m.status = 'oauth_active' AND m.oauth_access_token_encrypted IS NOT NULL)
+              )
             ORDER BY m.is_group DESC, m.created_at ASC
             LIMIT $1
             """,
@@ -111,7 +116,12 @@ class ImapWorkerManager:
         wanted: dict[str, MailboxConfig] = {}
         for r in rows:
             try:
-                pw = decrypt(r["password_encrypted"])
+                if r["auth_kind"] == "basic":
+                    pw = decrypt(r["password_encrypted"])
+                    access_token = None
+                else:
+                    pw = None
+                    access_token = decrypt(r["oauth_access_token_encrypted"])
             except ValueError as e:
                 log.error(
                     "imap_manager.decrypt_failed", address=r["address"], error=str(e),
@@ -122,7 +132,9 @@ class ImapWorkerManager:
                 provider_host=r["imap_host"],
                 provider_port=r["imap_port"],
                 provider_ssl=r["imap_ssl"],
+                auth_kind=r["auth_kind"],
                 password=pw,
+                access_token=access_token,
                 is_group=r["is_group"],
             )
 
@@ -167,11 +179,15 @@ class ImapWorkerManager:
         """One full IMAP login → fetch backlog → IDLE → disconnect cycle."""
         def _open_box() -> MailBox:
             box = MailBox(cfg.provider_host, port=cfg.provider_port)
-            box.login(cfg.address, cfg.password, initial_folder="INBOX")
+            if cfg.auth_kind == "basic":
+                box.login(cfg.address, cfg.password, initial_folder="INBOX")
+            else:
+                # XOAUTH2 — imap-tools provides .xoauth2(user, access_token)
+                box.xoauth2(cfg.address, cfg.access_token, initial_folder="INBOX")
             return box
 
         box = await asyncio.to_thread(_open_box)
-        log.info("imap_worker.connected", address=cfg.address)
+        log.info("imap_worker.connected", address=cfg.address, auth=cfg.auth_kind)
         try:
             await self._mark_verified(cfg.address)
 

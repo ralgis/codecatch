@@ -79,10 +79,29 @@
   </table>
 </div>
 
-<form method="post" action="/admin/mailboxes/{{ mailbox.address }}/delete"
-      onsubmit="return confirm('Delete this mailbox? This also removes its password history. Codes are kept.')">
-  <button class="btn btn-sm btn-outline-danger mt-3"><i class="bi bi-trash"></i> Delete mailbox</button>
-</form>
+<div class="mt-3 d-flex gap-2">
+  {% if mailbox.provider_auth_kind == 'oauth_microsoft' and not mailbox.is_group %}
+  <button class="btn btn-sm btn-outline-info" onclick="setupForwarding('{{ mailbox.address }}')">
+    <i class="bi bi-arrow-right-circle"></i> Setup forwarding via Playwright
+  </button>
+  <span id="setup-status" class="align-self-center small text-muted"></span>
+  {% endif %}
+  <form method="post" action="/admin/mailboxes/{{ mailbox.address }}/delete"
+        onsubmit="return confirm('Delete this mailbox? This also removes its password history. Codes are kept.')">
+    <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete mailbox</button>
+  </form>
+</div>
+
+<script>
+async function setupForwarding(addr) {
+  const statusEl = document.getElementById('setup-status');
+  statusEl.textContent = '⏳ Driving Playwright (up to 90s)...';
+  const r = await fetch('/admin/mailboxes/' + encodeURIComponent(addr) + '/setup-forwarding', {method: 'POST'});
+  const data = await r.json();
+  statusEl.textContent = (data.ok ? '✓ ' : '✗ ') + data.detail;
+  statusEl.className = 'align-self-center small ' + (data.ok ? 'text-success' : 'text-danger');
+}
+</script>
 
 {% if admin.is_super_admin %}
 <script>

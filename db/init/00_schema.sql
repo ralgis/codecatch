@@ -127,6 +127,21 @@ CREATE TABLE mailboxes (
     headless_last_attempt_at  TIMESTAMPTZ,
     headless_proxy_url        TEXT,                  -- optional proxy passed via API
 
+    -- Strategy override
+    mode                      TEXT         NOT NULL DEFAULT 'auto'
+        CHECK (mode IN ('auto', 'direct_only', 'group_only', 'both')),
+    forwarding_target         TEXT,                                    -- documentation: where this address forwards to
+
+    -- OAuth access-token cache (refreshed periodically)
+    oauth_access_token_encrypted    TEXT,
+    oauth_access_token_expires_at   TIMESTAMPTZ,
+
+    -- Forwarding probe state
+    last_forwarding_probe_at  TIMESTAMPTZ,
+    forwarding_probe_status   TEXT
+        CHECK (forwarding_probe_status IN ('ok', 'failed', 'pending') OR forwarding_probe_status IS NULL),
+    forwarding_probe_error    TEXT,
+
     -- Metadata
     purpose                   TEXT,
     notes                     TEXT,
