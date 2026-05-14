@@ -111,6 +111,57 @@ async def mailbox_upsert(
     )
 
 
+@router.get("/mailboxes/pending-consent")
+async def mailboxes_pending_consent(
+    request: Request,
+    key: Annotated[CurrentApiKey, Depends(require_api_key)],
+):
+    """List mailboxes awaiting human OAuth consent (status='pending_oauth_manual')
+    or queued for headless attempt (status='pending_oauth_headless').
+
+    audiotrace polls this to surface "you have N mailboxes to consent" in its
+    own admin UI, with a button that opens consent_url in a new browser tab.
+    """
+    pool: asyncpg.Pool = request.app.state.db_pool
+    rows = await pool.fetch(
+        """
+        SELECT m.address, m.status, m.purpose,
+               m.oauth_consent_url, m.oauth_consent_expires_at,
+               m.oauth_last_error, m.headless_attempt_count,
+               m.headless_last_attempt_at,
+               m.created_at,
+               p.name AS provider_name
+        FROM mailboxes m
+        LEFT JOIN providers p ON m.provider_id = p.id
+        WHERE m.tenant_id = $1
+          AND m.is_active = TRUE
+          AND m.status IN ('pending_oauth_manual', 'pending_oauth_headless')
+        ORDER BY m.created_at ASC
+        """,
+        key.tenant_id,
+    )
+    return {
+        "count": len(rows),
+        "items": [
+            {
+                "address": r["address"],
+                "status": r["status"],
+                "provider": r["provider_name"],
+                "purpose": r["purpose"],
+                "consent_url": r["oauth_consent_url"],
+                "consent_expires_at": r["oauth_consent_expires_at"].isoformat()
+                    if r["oauth_consent_expires_at"] else None,
+                "last_error": r["oauth_last_error"],
+                "attempts": r["headless_attempt_count"],
+                "last_attempt_at": r["headless_last_attempt_at"].isoformat()
+                    if r["headless_last_attempt_at"] else None,
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.get("/mailboxes/{address}", response_model=MailboxResponse)
 async def mailbox_get(
     request: Request,

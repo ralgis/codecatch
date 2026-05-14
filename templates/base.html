@@ -66,6 +66,15 @@
             </a>
           </li>
           <li class="nav-item">
+            <a class="nav-link d-flex align-items-center {% if '/admin/oauth-pending' in request.url.path %}active{% endif %}"
+               href="/admin/oauth-pending"
+               id="oauth-pending-link">
+              <i class="bi bi-shield-lock"></i>
+              <span class="ms-1">OAuth pending</span>
+              <span id="oauth-pending-badge" class="badge text-bg-danger ms-auto d-none"></span>
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link {% if '/admin/providers' in request.url.path %}active{% endif %}" href="/admin/providers">
               <i class="bi bi-hdd-network"></i> Providers
             </a>
@@ -117,6 +126,28 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  {% if admin %}
+  <script>
+    // Sidebar badge counter for pending OAuth consents — polls every 30 seconds.
+    async function refreshOAuthPendingBadge() {
+      try {
+        const r = await fetch('/admin/api/oauth-pending-count', {credentials: 'same-origin'});
+        if (!r.ok) return;
+        const data = await r.json();
+        const badge = document.getElementById('oauth-pending-badge');
+        if (!badge) return;
+        if (data.count > 0) {
+          badge.textContent = data.count;
+          badge.classList.remove('d-none');
+        } else {
+          badge.classList.add('d-none');
+        }
+      } catch (e) { /* ignore — network blip */ }
+    }
+    refreshOAuthPendingBadge();
+    setInterval(refreshOAuthPendingBadge, 30000);
+  </script>
+  {% endif %}
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>

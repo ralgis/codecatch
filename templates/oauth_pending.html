@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}OAuth pending — codecatch{% endblock %}
+{% block content %}
+<h2 class="mb-3">OAuth — pending consent</h2>
+<p class="text-muted small">
+  Mailboxes that need a one-time browser-based OAuth consent. Click
+  <strong>Open consent</strong> — it opens in a new tab using your own
+  browser (your residential IP). After you sign in and click Allow,
+  Microsoft / Google redirects back to codecatch and the mailbox flips
+  to <code>oauth_active</code>. This page will then no longer show it.
+</p>
+
+{% if not mailboxes %}
+<div class="alert alert-success">
+  <i class="bi bi-check-circle"></i>
+  No mailboxes are waiting for consent right now. Everything's auto-routed
+  via groups or already consented.
+</div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Address</th>
+        <th>Provider</th>
+        <th>Status</th>
+        <th>Attempts</th>
+        <th>Last error (truncated)</th>
+        <th>Created</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in mailboxes %}
+      <tr>
+        <td>
+          <code>{{ m.address }}</code>
+          {% if m.purpose %}<small class="text-muted d-block">{{ m.purpose }}</small>{% endif %}
+        </td>
+        <td>{{ m.provider_name }}</td>
+        <td>
+          {% if m.status == 'pending_oauth_manual' %}
+            <span class="badge text-bg-warning">manual</span>
+          {% else %}
+            <span class="badge text-bg-info">queued</span>
+          {% endif %}
+        </td>
+        <td>
+          <span class="badge text-bg-secondary">{{ m.headless_attempt_count }}</span>
+          {% if m.headless_last_attempt_at %}
+            <small class="text-muted d-block">{{ m.headless_last_attempt_at.strftime('%m-%d %H:%M') }}</small>
+          {% endif %}
+        </td>
+        <td><small class="text-danger">{{ (m.oauth_last_error or '')[:80] }}</small></td>
+        <td><small>{{ m.created_at.strftime('%Y-%m-%d %H:%M') }}</small></td>
+        <td>
+          {% if m.oauth_consent_url %}
+          <a href="{{ m.oauth_consent_url }}"
+             target="_blank"
+             rel="noopener"
+             class="btn btn-sm btn-primary">
+            <i class="bi bi-box-arrow-up-right"></i> Open consent
+          </a>
+          {% else %}
+            <small class="text-muted">no URL yet — queued</small>
+          {% endif %}
+          <a href="/admin/mailboxes/{{ m.address }}"
+             class="btn btn-sm btn-outline-secondary ms-1">details</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="mt-4 small text-muted">
+  <strong>What to do if click doesn't work:</strong>
+  <ul class="mt-1">
+    <li>Open consent URL in <strong>Incognito / Private window</strong> — avoids account confusion.</li>
+    <li>If Microsoft shows MFA prompt — complete it. codecatch can't pass MFA headlessly.</li>
+    <li>If the URL has expired (after ~30 min): delete and re-register the mailbox
+        via <a href="/admin/mailboxes/new">+ Add mailbox</a> to get a fresh consent URL.</li>
+  </ul>
+</div>
+
+<p class="text-muted small mt-3">
+  Page auto-refreshes every 15 seconds.
+</p>
+<span hx-get="/admin/oauth-pending"
+      hx-trigger="every 15s"
+      hx-select="table"
+      hx-target="table"
+      hx-swap="outerHTML"></span>
+{% endif %}
+{% endblock %}

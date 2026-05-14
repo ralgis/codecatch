@@ -616,6 +616,60 @@ async def admin_deactivate(
 
 
 # ─── Extractor patterns + playground ──────────────────────────────────────
+@router.get("/api/oauth-pending-count")
+async def oauth_pending_count(
+    request: Request,
+    admin: Annotated[CurrentAdmin, Depends(require_admin)],
+):
+    """Tiny JSON used by the sidebar badge."""
+    pool = request.app.state.db_pool
+    where = ["status IN ('pending_oauth_manual', 'pending_oauth_headless')", "is_active = TRUE"]
+    args: list[Any] = []
+    if not admin.is_super_admin:
+        args.append(admin.tenant_id)
+        where.append(f"tenant_id = ${len(args)}")
+    count = await pool.fetchval(
+        f"SELECT COUNT(*) FROM mailboxes WHERE {' AND '.join(where)}", *args
+    )
+    return {"count": int(count or 0)}
+
+
+@router.get("/oauth-pending", response_class=HTMLResponse)
+async def oauth_pending(
+    request: Request,
+    admin: Annotated[CurrentAdmin, Depends(require_admin)],
+):
+    """List of mailboxes awaiting human OAuth consent.
+    Headless attempts failed (challenge / captcha / MFA), so the operator
+    needs to click the consent_url in their own browser one time."""
+    pool = request.app.state.db_pool
+    where = ["m.status IN ('pending_oauth_manual', 'pending_oauth_headless')", "m.is_active = TRUE"]
+    args: list[Any] = []
+    if not admin.is_super_admin:
+        args.append(admin.tenant_id)
+        where.append(f"m.tenant_id = ${len(args)}")
+    where_sql = " AND ".join(where)
+    rows = await pool.fetch(
+        f"""
+        SELECT m.address, m.status, m.purpose, m.created_at,
+               m.oauth_consent_url, m.oauth_consent_expires_at,
+               m.oauth_last_error, m.headless_attempt_count,
+               m.headless_last_attempt_at,
+               p.name AS provider_name,
+               t.slug AS tenant_slug
+        FROM mailboxes m
+        LEFT JOIN providers p ON m.provider_id = p.id
+        LEFT JOIN tenants t ON m.tenant_id = t.id
+        WHERE {where_sql}
+        ORDER BY m.created_at ASC
+        """,
+        *args,
+    )
+    return templates.TemplateResponse(
+        request, "oauth_pending.html", {"admin": admin, "mailboxes": rows}
+    )
+
+
 @router.get("/silent", response_class=HTMLResponse)
 async def silent_mailboxes(
     request: Request,
