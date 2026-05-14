@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: codecatch_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - codecatch_pgdata:/var/lib/postgresql/data
+      # First-run schema + seed. These only execute when the volume is empty.
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: ghcr.io/ralgis/codecatch-api:latest
+    container_name: codecatch_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      BOOTSTRAP_ADMIN_USER: ${BOOTSTRAP_ADMIN_USER}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      BASE_URL: ${BASE_URL}
+      HOST: ${HOST:-0.0.0.0}
+      PORT: ${PORT:-8080}
+      OAUTH_DEFAULT_STRATEGY: ${OAUTH_DEFAULT_STRATEGY:-thunderbird}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      CODE_RETENTION_DAYS: ${CODE_RETENTION_DAYS:-30}
+    ports:
+      - "${PORT:-8080}:8080"
+
+  workers:
+    build:
+      context: .
+      dockerfile: Dockerfile.workers
+    image: ghcr.io/ralgis/codecatch-workers:latest
+    container_name: codecatch_workers
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      BASE_URL: ${BASE_URL}
+      OAUTH_DEFAULT_STRATEGY: ${OAUTH_DEFAULT_STRATEGY:-thunderbird}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      MAX_IMAP_WORKERS: ${MAX_IMAP_WORKERS:-50}
+      PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
+      PLAYWRIGHT_TIMEOUT_SEC: ${PLAYWRIGHT_TIMEOUT_SEC:-60}
+
+volumes:
+  codecatch_pgdata:

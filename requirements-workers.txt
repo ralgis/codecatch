@@ -1,0 +1,5 @@
+# Extra deps for the workers container (Playwright-heavy).
+# Build target: codecatch_workers
+-r requirements.txt
+
+playwright>=1.49,<2.0

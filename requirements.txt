@@ -1,0 +1,25 @@
+# Pinned dependencies for Docker builds.
+# Source of truth is pyproject.toml; this file is regenerated as needed:
+#   pip install -e . && pip freeze > requirements.txt
+
+fastapi>=0.115,<0.120
+uvicorn[standard]>=0.32,<1.0
+jinja2>=3.1,<4.0
+python-multipart>=0.0.20
+itsdangerous>=2.2
+starlette>=0.41
+
+asyncpg>=0.30,<1.0
+pydantic>=2.10,<3.0
+pydantic-settings>=2.6
+email-validator>=2.2
+
+cryptography>=43
+bcrypt>=4.2
+
+aioimaplib>=1.1
+imap-tools>=1.7
+
+httpx>=0.28
+
+structlog>=24.4

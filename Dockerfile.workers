@@ -1,0 +1,23 @@
+# codecatch workers container — IMAP IDLE + OAuth headless consent (Playwright).
+# Larger image (~700MB) due to Chromium bundled with Playwright.
+FROM mcr.microsoft.com/playwright/python:v1.49.0-jammy AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+COPY requirements.txt requirements-workers.txt ./
+RUN pip install --no-cache-dir -r requirements-workers.txt
+
+# Playwright browsers come pre-installed in the base image. If we want to be
+# explicit (or pin a different version), uncomment:
+# RUN playwright install --with-deps chromium
+
+COPY workers ./workers
+COPY extractors ./extractors
+COPY db ./db
+
+CMD ["python", "-m", "workers.main"]

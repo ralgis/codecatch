@@ -1,0 +1,72 @@
+[project]
+name = "codecatch"
+version = "0.0.1"
+description = "Self-hosted email verification code router with multi-tenant API"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Algirdas Rakauskas" }]
+
+dependencies = [
+    # web
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.20",
+    "itsdangerous>=2.2",        # session cookie signing
+    "starlette>=0.41",           # transitive — explicit for type hints
+
+    # db
+    "asyncpg>=0.30",
+    "pgcli>=4.1",                # only for dev convenience; remove from prod deps later
+
+    # validation
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+
+    # crypto
+    "cryptography>=43",          # Fernet
+    "bcrypt>=4.2",               # admin password hashing
+
+    # imap / mail
+    "aioimaplib>=1.1",           # async IMAP client
+    "imap-tools>=1.7",           # higher-level parser convenience
+
+    # http (oauth, webhooks)
+    "httpx>=0.28",
+
+    # workers
+    "playwright>=1.49",          # OAuth headless consent
+
+    # observability
+    "structlog>=24.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "httpx>=0.28",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["api*", "workers*", "extractors*", "codecatch*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC"]
+ignore = ["E501"]   # line length handled by formatter
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
