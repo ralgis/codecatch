@@ -31,7 +31,7 @@ from codecatch.logging_setup import get_logger
 router = APIRouter()
 log = get_logger("oauth_callback")
 
-REDIRECT_URI_GOOGLE = "http://127.0.0.1:8765/callback"   # same constants as worker
+REDIRECT_URI_GOOGLE = "http://localhost:8080/oauth/callback"   # same constants as worker
 REDIRECT_URI_MS = "https://login.microsoftonline.com/common/oauth2/nativeclient"
 
 

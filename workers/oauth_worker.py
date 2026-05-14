@@ -75,7 +75,10 @@ from codecatch.logging_setup import get_logger
 log = get_logger("oauth_worker")
 
 REDIRECT_URI_MS = "https://login.microsoftonline.com/common/oauth2/nativeclient"
-REDIRECT_URI_GOOGLE = "http://127.0.0.1:8765/callback"   # we intercept this in Playwright
+# Mozilla Thunderbird's Google client_id has loopback (http://127.0.0.1:PORT)
+# registered per RFC 8252, so we can route the manual browser flow to our own
+# /oauth/callback endpoint instead of needing DevTools tricks.
+REDIRECT_URI_GOOGLE = "http://localhost:8080/oauth/callback"
 
 # Mozilla Thunderbird's Microsoft client_id has ONLY the nativeclient URI
 # registered. We tested http://localhost:8080/oauth/callback — Microsoft
