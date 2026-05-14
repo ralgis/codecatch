@@ -27,15 +27,46 @@ import time
 import urllib.parse
 from dataclasses import dataclass
 
+import os
+
 import asyncpg
 import httpx
-from playwright.async_api import (
-    Browser,
-    BrowserContext,
-    Page,
-    TimeoutError as PlaywrightTimeoutError,
-    async_playwright,
+# patchright is a drop-in replacement for playwright with anti-detection patches.
+# Falls back to vanilla playwright if patchright is unavailable.
+try:
+    from patchright.async_api import (
+        Browser,
+        BrowserContext,
+        Page,
+        TimeoutError as PlaywrightTimeoutError,
+        async_playwright,
+    )
+except ImportError:
+    from playwright.async_api import (
+        Browser,
+        BrowserContext,
+        Page,
+        TimeoutError as PlaywrightTimeoutError,
+        async_playwright,
+    )
+
+# Realistic browser fingerprint for OAuth consent. Pinned to a recent Chrome
+# stable version so it doesn't stand out as "headless" — match this against
+# patchright's bundled chromium major version periodically.
+REALISTIC_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 )
+REALISTIC_VIEWPORT = {"width": 1920, "height": 1080}
+REALISTIC_LOCALE = "en-US"
+REALISTIC_TIMEZONE = "Europe/Berlin"
+ANTI_AUTOMATION_ARGS = [
+    "--disable-blink-features=AutomationControlled",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+]
+
+PROFILES_DIR = "/app/playwright_profiles"
 
 from codecatch.config import get_settings
 from codecatch.crypto import decrypt, encrypt
@@ -165,15 +196,30 @@ class OAuthWorker:
         log.info("oauth_worker.authorize_url", address=attempt.address, url=authorize_url[:200])
 
         s = get_settings()
-        if self._browser is None:
-            assert self._pw_ctx is not None
-            launch_kwargs: dict = {"headless": s.playwright_headless}
-            if attempt.proxy_url:
-                launch_kwargs["proxy"] = {"server": attempt.proxy_url}
-            self._browser = await self._pw_ctx.chromium.launch(**launch_kwargs)
+        assert self._pw_ctx is not None
 
-        context: BrowserContext = await self._browser.new_context()
-        page = await context.new_page()
+        # Persistent profile per mailbox — cookies + history survive between
+        # attempts, so Microsoft / Google see "the same device that consented
+        # last week" rather than a brand-new headless browser each time.
+        safe_addr = attempt.address.replace("@", "_at_").replace("/", "_")
+        profile_dir = os.path.join(PROFILES_DIR, safe_addr)
+        os.makedirs(profile_dir, exist_ok=True)
+
+        launch_kwargs: dict = {
+            "user_data_dir": profile_dir,
+            "headless": s.playwright_headless,
+            "user_agent": REALISTIC_UA,
+            "viewport": REALISTIC_VIEWPORT,
+            "locale": REALISTIC_LOCALE,
+            "timezone_id": REALISTIC_TIMEZONE,
+            "color_scheme": "light",
+            "args": ANTI_AUTOMATION_ARGS,
+        }
+        if attempt.proxy_url:
+            launch_kwargs["proxy"] = {"server": attempt.proxy_url}
+
+        context: BrowserContext = await self._pw_ctx.chromium.launch_persistent_context(**launch_kwargs)
+        page = context.pages[0] if context.pages else await context.new_page()
         debug_saved = False
         try:
             await page.goto(authorize_url, timeout=s.playwright_timeout_sec * 1000)
@@ -283,15 +329,25 @@ class OAuthWorker:
         # the normal sign-in flow (typically when the IP is suspicious). Detect
         # it and try to pass it by re-typing the same email.
         try:
-            proof = page.locator('[data-testid="proof-confirmation-email-input"]')
-            if await proof.count() > 0:
+            # The data-testid wraps a <div> — the actual input is below it.
+            proof_input = page.locator(
+                '#proof-confirmation-email-input, '
+                '[data-testid="proof-confirmation-email-input"] input'
+            )
+            if await proof_input.count() > 0:
                 log.info("oauth_worker.proof_challenge", address=attempt.address)
-                await proof.first.fill(attempt.address, timeout=15000)
-                await page.click('[data-testid="primaryButton"], button[type="submit"]', timeout=15000)
-                # Wait a moment for next screen to render
+                await proof_input.first.fill(attempt.address, timeout=15000)
+                await page.click(
+                    '[data-testid="primaryButton"] button, '
+                    '[data-testid="primaryButton"], '
+                    'button[type="submit"]',
+                    timeout=15000,
+                )
                 await asyncio.sleep(2)
         except PlaywrightTimeoutError:
             pass
+        except Exception as e:  # noqa: BLE001
+            log.warning("oauth_worker.proof_handling_failed", error=str(e)[:200])
 
         # Email step (normal sign-in form)
         await page.fill(

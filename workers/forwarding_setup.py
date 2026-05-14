@@ -20,11 +20,21 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+import os
+
 import asyncpg
 
 from codecatch.config import get_settings
 from codecatch.crypto import decrypt
 from codecatch.logging_setup import get_logger
+from workers.oauth_worker import (
+    ANTI_AUTOMATION_ARGS,
+    PROFILES_DIR,
+    REALISTIC_LOCALE,
+    REALISTIC_TIMEZONE,
+    REALISTIC_UA,
+    REALISTIC_VIEWPORT,
+)
 
 log = get_logger("forwarding_setup")
 
@@ -52,28 +62,41 @@ async def configure_outlook_forwarding(
     s = get_settings()
 
     # Lazy import — Playwright is only present in the workers container,
-    # not in api. Caller must run this in an environment that has Playwright.
+    # not in api. Caller must run this in an environment that has it.
     try:
-        from playwright.async_api import async_playwright
+        from patchright.async_api import async_playwright
     except ImportError:
-        return SetupResult(
-            False,
-            "Playwright not available in this container. Trigger via workers container or "
-            "queue it (e.g. via DB flag) so the workers process picks it up.",
-        )
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            return SetupResult(
+                False,
+                "Playwright/patchright not available in this container. Trigger via workers.",
+            )
+
+    safe_addr = hotmail_address.replace("@", "_at_").replace("/", "_")
+    profile_dir = os.path.join(PROFILES_DIR, safe_addr)
+    os.makedirs(profile_dir, exist_ok=True)
 
     async with async_playwright() as pw:
-        launch_kwargs: dict = {"headless": s.playwright_headless}
+        launch_kwargs: dict = {
+            "user_data_dir": profile_dir,
+            "headless": s.playwright_headless,
+            "user_agent": REALISTIC_UA,
+            "viewport": REALISTIC_VIEWPORT,
+            "locale": REALISTIC_LOCALE,
+            "timezone_id": REALISTIC_TIMEZONE,
+            "color_scheme": "light",
+            "args": ANTI_AUTOMATION_ARGS,
+        }
         if proxy_url:
             launch_kwargs["proxy"] = {"server": proxy_url}
-        browser = await pw.chromium.launch(**launch_kwargs)
-        context = await browser.new_context()
-        page = await context.new_page()
+        context = await pw.chromium.launch_persistent_context(**launch_kwargs)
+        page = context.pages[0] if context.pages else await context.new_page()
         try:
             return await _drive(page, hotmail_address, hotmail_password, forward_to, keep_copy)
         finally:
             await context.close()
-            await browser.close()
 
 
 async def _drive(page, addr: str, password: str, forward_to: str, keep_copy: bool) -> SetupResult:

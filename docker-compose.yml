@@ -51,7 +51,8 @@ services:
     container_name: codecatch_workers
     restart: unless-stopped
     volumes:
-      - ./debug:/app/debug         # screenshots + HTML dumps from failed OAuth flows
+      - ./debug:/app/debug                          # screenshots + HTML dumps from failed OAuth flows
+      - codecatch_pw_profiles:/app/playwright_profiles  # per-mailbox browser profiles (cookies, history)
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,3 +72,4 @@ services:
 
 volumes:
   codecatch_pgdata:
+  codecatch_pw_profiles:

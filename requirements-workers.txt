@@ -3,3 +3,6 @@
 -r requirements.txt
 
 playwright>=1.49,<2.0
+patchright>=1.55,<2.0   # anti-detect Playwright fork — used instead of playwright
+                        # in oauth_worker / forwarding_setup. playwright stays as
+                        # a fallback/base.

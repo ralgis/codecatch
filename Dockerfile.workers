@@ -12,9 +12,9 @@ WORKDIR /app
 COPY requirements.txt requirements-workers.txt ./
 RUN pip install --no-cache-dir -r requirements-workers.txt
 
-# Playwright browsers come pre-installed in the base image. If we want to be
-# explicit (or pin a different version), uncomment:
-# RUN playwright install --with-deps chromium
+# Playwright browsers come pre-installed in the base image.
+# Patchright needs its own patched chromium — install it next to the playwright one.
+RUN patchright install chromium
 
 COPY codecatch ./codecatch
 COPY workers ./workers
