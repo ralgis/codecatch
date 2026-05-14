@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import asyncpg
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from api import __version__
@@ -55,7 +55,7 @@ async def root() -> dict[str, Any]:
 
 
 @app.get("/healthz")
-async def healthz(request) -> JSONResponse:  # type: ignore[no-untyped-def]
+async def healthz(request: Request) -> JSONResponse:
     """Liveness + DB connectivity probe."""
     pool: asyncpg.Pool = request.app.state.db_pool
     db_ok = False
