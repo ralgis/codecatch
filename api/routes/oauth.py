@@ -1,21 +1,29 @@
-"""Public OAuth callback endpoint.
+"""OAuth callback / paste-back endpoints.
 
-Used by the manual-fallback flow: when headless can't complete (MFA / captcha),
-codecatch stores a consent_url and the human opens it in a browser. After the
-human clicks Accept, the provider redirects to this endpoint with ?code=...
-We then exchange the code for refresh_token and flip the mailbox to oauth_active.
+Two ways the user can finish a manual OAuth flow:
 
-Note: this endpoint is unauthenticated — security comes from the `state`
-parameter which is only known to us and to the user who started the flow.
+1. **Native callback** (used when redirect_uri actually points at codecatch):
+   provider redirects browser to /oauth/callback?code=...&state=... ; we
+   handle it automatically.
+
+2. **Paste-back** (used when redirect_uri is the Microsoft nativeclient
+   URL — which is the only redirect URI Mozilla's Thunderbird client_id
+   has registered). The user copies the final URL from their address bar
+   and pastes it into a form at /admin/oauth-paste — codecatch extracts
+   `code` and `state` and runs the same exchange.
+
+Security comes from the `state` parameter — only known to us and to the
+user who started the flow.
 """
 from __future__ import annotations
 
 import json
+import urllib.parse
 from typing import Annotated
 
 import httpx
-from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Form, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from codecatch.crypto import decrypt, encrypt
 from codecatch.logging_setup import get_logger
@@ -23,7 +31,7 @@ from codecatch.logging_setup import get_logger
 router = APIRouter()
 log = get_logger("oauth_callback")
 
-REDIRECT_URI_GOOGLE = "http://127.0.0.1:8765/callback"   # same constant as worker
+REDIRECT_URI_GOOGLE = "http://127.0.0.1:8765/callback"   # same constants as worker
 REDIRECT_URI_MS = "https://login.microsoftonline.com/common/oauth2/nativeclient"
 
 
@@ -38,13 +46,55 @@ async def oauth_callback(
         return _html_error(f"Provider returned error: {error}")
     if not code or not state:
         return _html_error("Missing code or state parameter")
+    return await _do_exchange(request, code=code, state=state)
 
+
+@router.post("/admin/oauth-paste")
+async def oauth_paste(
+    request: Request,
+    pasted_url: Annotated[str, Form()],
+):
+    """Operator finishes OAuth manually, then pastes the full address-bar URL here.
+    We extract `code` and `state` and reuse the same /oauth/callback logic.
+
+    Accepts:
+      - full URL (https://login.microsoftonline.com/common/oauth2/nativeclient?code=...&state=...)
+      - just the query string (code=...&state=...)
+      - or any URL containing those params anywhere
+    """
+    pasted = pasted_url.strip()
+    if not pasted:
+        return _html_error("Empty paste — copy the URL from your address bar and paste here.")
+
+    parsed = urllib.parse.urlparse(pasted)
+    qs = parsed.query if parsed.query else pasted   # accept raw query string too
+    params = urllib.parse.parse_qs(qs)
+    code_list = params.get("code", [])
+    state_list = params.get("state", [])
+    error_list = params.get("error", [])
+
+    if error_list:
+        return _html_error(f"Provider returned error in URL: {error_list[0]}")
+    if not code_list or not state_list:
+        return _html_error(
+            "Could not find `code` and `state` in the pasted URL. "
+            "Make sure you copied the FULL address-bar URL after Microsoft redirected you."
+        )
+
+    # Delegate to the same logic as the GET callback
+    return await _do_exchange(
+        request, code=code_list[0], state=state_list[0],
+    )
+
+
+async def _do_exchange(request: Request, *, code: str, state: str) -> HTMLResponse:
+    """Shared token-exchange logic used by both /oauth/callback and /admin/oauth-paste."""
     pool = request.app.state.db_pool
     flow_row = await pool.fetchrow(
         "SELECT value FROM settings WHERE key = $1", f"oauth.flow.{state}"
     )
     if not flow_row:
-        return _html_error("Unknown or expired OAuth state — start over from /admin/mailboxes")
+        return _html_error("Unknown or expired OAuth state — start over from /admin/oauth-pending.")
 
     flow = flow_row["value"] if isinstance(flow_row["value"], dict) else json.loads(flow_row["value"])
     address = flow["address"]
@@ -52,7 +102,6 @@ async def oauth_callback(
     client_id = flow["client_id"]
     scopes = flow["scopes"]
 
-    # Load provider for client_secret (Google only)
     prov_row = await pool.fetchrow(
         """
         SELECT auth_kind, oauth_strategy, oauth_client_secret_encrypted
@@ -102,7 +151,7 @@ async def oauth_callback(
 
     refresh = tokens.get("refresh_token")
     if not refresh:
-        return _html_error("Provider returned no refresh_token (this often means consent was incomplete)")
+        return _html_error("Provider returned no refresh_token (consent may have been incomplete)")
 
     await pool.execute(
         """
@@ -118,9 +167,7 @@ async def oauth_callback(
         """,
         address, encrypt(refresh),
     )
-    # Remove the one-time state record
     await pool.execute("DELETE FROM settings WHERE key = $1", f"oauth.flow.{state}")
-
     log.info("oauth_callback.success", address=address)
     return HTMLResponse(_html_success(address))
 

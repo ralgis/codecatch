@@ -116,12 +116,12 @@ VALUES
      'Fallback if body extraction missed: subject often contains the code too.'),
 
     -- ── Microsoft Account ───────────────────────────────────────────────────
-    ('microsoft', 'Microsoft security code (EN/RU)',
+    ('microsoft', 'Microsoft security/one-time code (EN/RU)',
      '(?i)account-security-noreply@accountprotection\.microsoft\.com|@accountprotection',
      NULL,
-     '(?:(?:Security|Verification)\s*code|Код\s*безопасности)\s*[:\-]?\s*(\d{4,8})',
-     'body', 10, TRUE,
-     'Matches both English "Security code: 135399" and Russian "Код безопасности: 135399".'),
+     '(?:(?:Security|Verification|One.?time)\s*code|Код\s*безопасности|Разовый\s*код)\s*[:\-]?\s*(\d{4,8})',
+     'body', 9, TRUE,
+     'Matches MS verification variants: Security/Verification/One-time code (EN), Код безопасности / Разовый код (RU).'),
 
     -- ── Twitter / X ─────────────────────────────────────────────────────────
     ('twitter', 'X / Twitter code',

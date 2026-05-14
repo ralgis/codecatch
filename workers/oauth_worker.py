@@ -77,6 +77,14 @@ log = get_logger("oauth_worker")
 REDIRECT_URI_MS = "https://login.microsoftonline.com/common/oauth2/nativeclient"
 REDIRECT_URI_GOOGLE = "http://127.0.0.1:8765/callback"   # we intercept this in Playwright
 
+# Mozilla Thunderbird's Microsoft client_id has ONLY the nativeclient URI
+# registered. We tested http://localhost:8080/oauth/callback — Microsoft
+# rejected it with "redirect_uri is not valid". So for the manual fallback
+# the user lands on the nativeclient warning page; recovering the auth code
+# from there requires either a DevTools trick or registering our own Azure
+# app with a real callback URL. See /admin/oauth-pending UI for paste-back
+# flow as a stop-gap.
+
 # Public Thunderbird OAuth client_id/secret for Google. "secret" here is not
 # really secret — it's a marker required by Google's installed-app flow. It
 # leaked years ago as part of TB's open-source code and Google considers

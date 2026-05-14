@@ -2,19 +2,31 @@
 {% block title %}OAuth pending — codecatch{% endblock %}
 {% block content %}
 <h2 class="mb-3">OAuth — pending consent</h2>
-<p class="text-muted small">
-  Mailboxes that need a one-time browser-based OAuth consent. Click
-  <strong>Open consent</strong> — it opens in a new tab using your own
-  browser (your residential IP). After you sign in and click Allow,
-  Microsoft / Google redirects back to codecatch and the mailbox flips
-  to <code>oauth_active</code>. This page will then no longer show it.
-</p>
+
+<div class="alert alert-info small">
+  <strong>Manual flow (because Mozilla's client_id only registered an embedded-webview
+  redirect URI):</strong>
+  <ol class="mb-0 mt-2">
+    <li>Click <strong>Open consent</strong> on a row below. A new tab opens with
+        Microsoft login.</li>
+    <li>Sign in with the mailbox password. If Microsoft prompts for an alternate
+        email, enter <code>codes.social@gmx.de</code> (the recovery email);
+        the verification code will arrive in codecatch and you can see it on
+        the Codes page.</li>
+    <li>Click <strong>Allow</strong> on the consent screen.</li>
+    <li>You'll land on a page that says <em>"This page is not normally shown
+        and could be a sign of a phishing attempt"</em> — <strong>that's our
+        page</strong>. The URL contains <code>?code=...</code>.
+        <strong>Don't close the tab.</strong></li>
+    <li><strong>Copy the entire URL</strong> from the address bar (Ctrl+L,
+        Ctrl+C) and paste it into the form at the bottom of this page.</li>
+  </ol>
+</div>
 
 {% if not mailboxes %}
 <div class="alert alert-success">
   <i class="bi bi-check-circle"></i>
-  No mailboxes are waiting for consent right now. Everything's auto-routed
-  via groups or already consented.
+  No mailboxes are waiting for consent right now.
 </div>
 {% else %}
 <div class="table-responsive">
@@ -25,7 +37,7 @@
         <th>Provider</th>
         <th>Status</th>
         <th>Attempts</th>
-        <th>Last error (truncated)</th>
+        <th>Last error</th>
         <th>Created</th>
         <th>Action</th>
       </tr>
@@ -62,7 +74,7 @@
             <i class="bi bi-box-arrow-up-right"></i> Open consent
           </a>
           {% else %}
-            <small class="text-muted">no URL yet — queued</small>
+            <small class="text-muted">no URL — queued</small>
           {% endif %}
           <a href="/admin/mailboxes/{{ m.address }}"
              class="btn btn-sm btn-outline-secondary ms-1">details</a>
@@ -73,23 +85,42 @@
   </table>
 </div>
 
-<div class="mt-4 small text-muted">
-  <strong>What to do if click doesn't work:</strong>
-  <ul class="mt-1">
-    <li>Open consent URL in <strong>Incognito / Private window</strong> — avoids account confusion.</li>
-    <li>If Microsoft shows MFA prompt — complete it. codecatch can't pass MFA headlessly.</li>
-    <li>If the URL has expired (after ~30 min): delete and re-register the mailbox
-        via <a href="/admin/mailboxes/new">+ Add mailbox</a> to get a fresh consent URL.</li>
-  </ul>
+<hr class="my-4">
+
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-clipboard-check"></i> Paste consent URL back here
+  </div>
+  <div class="card-body">
+    <form method="post" action="/admin/oauth-paste">
+      <div class="mb-3">
+        <label class="form-label small">
+          Full URL from Microsoft's "phishing attempt" warning page
+          (it has <code>?code=M.XXX...&amp;state=YYY</code>):
+        </label>
+        <textarea name="pasted_url"
+                  class="form-control font-monospace"
+                  rows="3"
+                  placeholder="https://login.microsoftonline.com/common/oauth2/nativeclient?code=M.C558_BAY...&state=..."
+                  required></textarea>
+      </div>
+      <button class="btn btn-success">
+        <i class="bi bi-check-circle"></i> Finish OAuth
+      </button>
+    </form>
+  </div>
 </div>
 
-<p class="text-muted small mt-3">
-  Page auto-refreshes every 15 seconds.
-</p>
-<span hx-get="/admin/oauth-pending"
-      hx-trigger="every 15s"
-      hx-select="table"
-      hx-target="table"
-      hx-swap="outerHTML"></span>
+<div class="mt-3 small text-muted">
+  <strong>Troubleshooting:</strong>
+  <ul class="mt-1">
+    <li>Microsoft blocks Ctrl+V on its verification-code field — type the
+        6-digit code manually (you can find it on the Codes page).</li>
+    <li>"Wrongplace" / blank page = OAuth context lost mid-flow. Retry from
+        Open consent.</li>
+    <li>State mismatch error after paste = consent_url expired (~30 min).
+        Delete and re-register the mailbox to get a fresh URL.</li>
+  </ul>
+</div>
 {% endif %}
 {% endblock %}
