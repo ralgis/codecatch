@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Extractor playground — codecatch{% endblock %}
+{% block content %}
+<a href="/admin/extractors" class="btn btn-sm btn-outline-secondary mb-3">← Back to extractors</a>
+<h2 class="mb-4">Extractor playground</h2>
+<p class="text-muted small">
+  Paste an email's sender/subject/body and see which pattern matches first.
+  Use this to debug "why didn't my code get extracted?" or "is my new regex
+  too greedy?" before editing the patterns table.
+</p>
+
+<div class="row">
+  <div class="col-md-6">
+    <form method="post" action="/admin/extractors/playground">
+      <div class="mb-3">
+        <label class="form-label">From</label>
+        <input type="text" name="sender" class="form-control form-control-sm"
+               value="{{ input.sender if input else '' }}"
+               placeholder="noreply@account.tiktok.com">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Subject</label>
+        <input type="text" name="subject" class="form-control form-control-sm"
+               value="{{ input.subject if input else '' }}"
+               placeholder="646207 is your 6-digit code">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Body</label>
+        <textarea name="body" class="form-control form-control-sm" rows="8"
+                  placeholder="Hello, your verification code is 646207...">{{ input.body if input else '' }}</textarea>
+      </div>
+      <button class="btn btn-sm btn-primary">Test extraction</button>
+    </form>
+  </div>
+  <div class="col-md-6">
+    <h5>Result</h5>
+    {% if result is none %}
+      <p class="text-muted">Submit the form to see how patterns match this email.</p>
+    {% elif result.code %}
+      <div class="alert alert-success">
+        <strong>✓ Extracted:</strong>
+        <code class="fs-5">{{ result.code }}</code>
+        <div class="small mt-1">
+          Platform: <code>{{ result.platform }}</code>
+          · Pattern: <code>{{ result.matched_pattern_name }} (id={{ result.matched_pattern_id }})</code>
+        </div>
+      </div>
+    {% else %}
+      <div class="alert alert-warning">
+        <strong>✗ No pattern matched.</strong>
+        Below: each pattern tried + which step failed.
+      </div>
+    {% endif %}
+
+    {% if result %}
+    <table class="table table-sm">
+      <thead><tr><th>Prio</th><th>Pattern</th><th>Sender</th><th>Subject</th><th>Code</th><th>Got</th></tr></thead>
+      <tbody>
+        {% for c in result.candidates %}
+        <tr {% if c.extracted %}class="table-success"{% endif %}>
+          <td><small>{{ c.priority }}</small></td>
+          <td><small>{{ c.platform }}/{{ c.name }}</small></td>
+          <td>{% if c.sender_match %}✓{% else %}✗{% endif %}</td>
+          <td>{% if c.subject_match %}✓{% else %}✗{% endif %}</td>
+          <td>{% if c.code_match %}✓{% else %}✗{% endif %}</td>
+          <td>{% if c.extracted %}<code>{{ c.extracted }}</code>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

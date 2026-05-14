@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements-workers.txt
 # explicit (or pin a different version), uncomment:
 # RUN playwright install --with-deps chromium
 
+COPY codecatch ./codecatch
 COPY workers ./workers
 COPY extractors ./extractors
 COPY db ./db

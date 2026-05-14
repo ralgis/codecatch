@@ -1,89 +1,57 @@
-"""Workers entrypoint — minimal scaffold.
-
-Real worker loop (IMAP IDLE per active mailbox, OAuth headless queue, code
-extraction) is implemented in subsequent commits. For now this process:
-  - connects to Postgres
-  - logs that it's alive
-  - sleeps in a loop with periodic heartbeat to prove the container is healthy
-
-Run with:
-    python -m workers.main
-"""
+"""Workers entrypoint — runs IMAP IDLE manager + OAuth headless worker concurrently."""
 from __future__ import annotations
 
 import asyncio
-import logging
-import os
 import signal
 
-import asyncpg
+from codecatch.config import get_settings
+from codecatch.db import create_pool
+from codecatch.logging_setup import configure_logging, get_logger
+from workers.imap_worker import ImapWorkerManager
+from workers.oauth_worker import OAuthWorker
 
 
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
+async def amain() -> None:
+    s = get_settings()
+    configure_logging(s.log_level)
+    log = get_logger("workers.main")
+    log.info("workers.startup", max_imap=s.max_imap_workers)
 
-logging.basicConfig(
-    level=LOG_LEVEL,
-    format="%(asctime)s %(levelname)s [workers] %(message)s",
-)
-log = logging.getLogger(__name__)
+    pool = await create_pool(min_size=2, max_size=15)
 
+    imap = ImapWorkerManager(pool, max_workers=s.max_imap_workers)
+    oauth = OAuthWorker(pool)
 
-class Workers:
-    def __init__(self) -> None:
-        self.pool: asyncpg.Pool | None = None
-        self.shutdown_event = asyncio.Event()
+    shutdown = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            loop.add_signal_handler(sig, shutdown.set)
+        except NotImplementedError:
+            # Windows in some configurations: signal handlers not available
+            pass
 
-    async def start(self) -> None:
-        if not DATABASE_URL:
-            raise RuntimeError("DATABASE_URL is required")
-        self.pool = await asyncpg.create_pool(
-            DATABASE_URL, min_size=1, max_size=10, command_timeout=10
-        )
-        log.info("Postgres pool ready")
+    tasks = [
+        asyncio.create_task(imap.run(), name="imap_manager"),
+        asyncio.create_task(oauth.run(), name="oauth_worker"),
+    ]
 
-        # Install signal handlers for graceful shutdown
-        loop = asyncio.get_running_loop()
-        for sig in (signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, self.shutdown_event.set)
+    await shutdown.wait()
+    log.info("workers.shutdown_requested")
 
-        await self.heartbeat_loop()
+    await imap.stop()
+    await oauth.stop()
 
-    async def heartbeat_loop(self) -> None:
-        """Placeholder loop — proves the container is alive.
-        Real worker logic (IMAP IDLE, OAuth jobs) goes here."""
-        assert self.pool is not None
-        while not self.shutdown_event.is_set():
-            try:
-                async with self.pool.acquire() as conn:
-                    n_mailboxes = await conn.fetchval(
-                        "SELECT COUNT(*) FROM mailboxes WHERE is_active = TRUE"
-                    )
-                    n_codes = await conn.fetchval("SELECT COUNT(*) FROM codes")
-                log.info(
-                    "heartbeat: mailboxes=%s codes=%s (workers idle, no real logic yet)",
-                    n_mailboxes,
-                    n_codes,
-                )
-            except Exception as e:  # noqa: BLE001
-                log.warning("heartbeat query failed: %s", e)
-
-            try:
-                await asyncio.wait_for(self.shutdown_event.wait(), timeout=30)
-            except asyncio.TimeoutError:
-                pass
-
-        log.info("shutdown signal received, cleaning up")
-        await self.pool.close()
-        log.info("workers stopped")
+    await asyncio.gather(*tasks, return_exceptions=True)
+    await pool.close()
+    log.info("workers.shutdown_complete")
 
 
 def main() -> None:
-    workers = Workers()
     try:
-        asyncio.run(workers.start())
+        asyncio.run(amain())
     except KeyboardInterrupt:
-        log.info("interrupted")
+        pass
 
 
 if __name__ == "__main__":

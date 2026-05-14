@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — codecatch{% endblock %}
+{% block content %}
+<h2 class="mb-4">Dashboard</h2>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-3">
+    <div class="card text-bg-primary">
+      <div class="card-body">
+        <h6 class="card-subtitle">Codes received (24h)</h6>
+        <p class="display-6 mb-0 mt-2">{{ stats.codes_today }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-bg-secondary">
+      <div class="card-body">
+        <h6 class="card-subtitle">Codes total</h6>
+        <p class="display-6 mb-0 mt-2">{{ stats.total_codes }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-bg-info">
+      <div class="card-body">
+        <h6 class="card-subtitle">Active mailboxes</h6>
+        <p class="display-6 mb-0 mt-2">{{ stats.mailboxes_active }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-bg-success">
+      <div class="card-body">
+        <h6 class="card-subtitle">Group inboxes</h6>
+        <p class="display-6 mb-0 mt-2">{{ stats.groups_active }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-clock-history"></i> Recent codes</span>
+    <a href="/admin/codes" class="btn btn-sm btn-outline-secondary">View all →</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover table-sm mb-0">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Target</th>
+          <th>Code</th>
+          <th>Platform</th>
+          <th>Sender</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in recent_codes %}
+        <tr onclick="window.location='/admin/codes/{{ c.id }}'">
+          <td><small class="text-muted">{{ c.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+          <td><code>{{ c.target_address }}</code></td>
+          <td><span class="badge text-bg-light fs-6">{{ c.code }}</span></td>
+          <td>{% if c.platform %}<span class="badge text-bg-info">{{ c.platform }}</span>{% endif %}</td>
+          <td><small>{{ (c.sender or '')[:40] }}</small></td>
+          <td>
+            {% if c.consumed_at %}
+              <span class="badge text-bg-secondary">consumed</span>
+            {% else %}
+              <span class="badge text-bg-success">unused</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No codes yet</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="mt-4 small text-muted">
+  Auto-refresh every 10s.
+  <span hx-get="/admin" hx-trigger="every 10s" hx-select=".row.g-3" hx-target=".row.g-3" hx-swap="outerHTML"></span>
+</div>
+{% endblock %}

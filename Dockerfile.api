@@ -20,7 +20,9 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
+COPY codecatch ./codecatch
 COPY api ./api
+COPY workers ./workers
 COPY extractors ./extractors
 COPY db ./db
 COPY templates ./templates

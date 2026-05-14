@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Mailboxes — codecatch{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Mailboxes</h2>
+  <div>
+    <div class="btn-group btn-group-sm me-2">
+      <a href="/admin/mailboxes" class="btn btn-outline-secondary {% if not is_group_filter %}active{% endif %}">All</a>
+      <a href="/admin/mailboxes?is_group=yes" class="btn btn-outline-secondary {% if is_group_filter == 'yes' %}active{% endif %}">Groups</a>
+      <a href="/admin/mailboxes?is_group=no"  class="btn btn-outline-secondary {% if is_group_filter == 'no'  %}active{% endif %}">Regular</a>
+    </div>
+    <a href="/admin/mailboxes/new" class="btn btn-sm btn-primary">+ Add mailbox</a>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-hover table-sm">
+    <thead>
+      <tr>
+        <th>Address</th>
+        <th>Type</th>
+        <th>Provider</th>
+        <th>Status</th>
+        <th>Codes</th>
+        <th>Last code</th>
+        {% if admin.is_super_admin %}<th>Tenant</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in mailboxes %}
+      <tr onclick="window.location='/admin/mailboxes/{{ m.address }}'">
+        <td><code>{{ m.address }}</code></td>
+        <td>
+          {% if m.is_group %}<span class="badge text-bg-warning"><i class="bi bi-share"></i> group</span>
+          {% else %}<span class="text-muted">—</span>{% endif %}
+        </td>
+        <td>{{ m.provider_name or '—' }}</td>
+        <td>
+          {% set badge = 'success' if m.status in ['direct_active','oauth_active','rely_on_groups'] else ('warning' if 'pending' in m.status else 'danger') %}
+          <span class="badge text-bg-{{ badge }} status-badge">{{ m.status | humanize_status }}</span>
+        </td>
+        <td>{{ m.codes_total }}</td>
+        <td><small class="text-muted">{{ m.last_code_at.strftime('%Y-%m-%d %H:%M') if m.last_code_at else '—' }}</small></td>
+        {% if admin.is_super_admin %}<td><small>{{ m.tenant_slug }}</small></td>{% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted py-4">
+        No mailboxes yet. <a href="/admin/mailboxes/new">Add one</a>.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

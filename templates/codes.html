@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Codes — codecatch{% endblock %}
+{% block content %}
+<h2 class="mb-3">Codes <small class="text-muted">({{ total }} total)</small></h2>
+
+<form class="row g-2 mb-3" method="get">
+  <div class="col-md-3">
+    <input type="text" name="target" value="{{ filters.target }}"
+           class="form-control form-control-sm" placeholder="Target address contains...">
+  </div>
+  <div class="col-md-2">
+    <select name="platform" class="form-select form-select-sm">
+      <option value="">— platform —</option>
+      {% for p in ['tiktok','instagram','microsoft','twitter','facebook','generic'] %}
+        <option value="{{ p }}" {% if filters.platform == p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <select name="consumed" class="form-select form-select-sm">
+      <option value="">— status —</option>
+      <option value="yes" {% if filters.consumed == 'yes' %}selected{% endif %}>consumed</option>
+      <option value="no"  {% if filters.consumed == 'no'  %}selected{% endif %}>unused</option>
+    </select>
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filter</button>
+    <a href="/admin/codes" class="btn btn-sm btn-outline-secondary">Reset</a>
+  </div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-hover table-sm">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Target</th>
+        <th>Code</th>
+        <th>Platform</th>
+        <th>Sender</th>
+        <th>Subject</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in codes %}
+      <tr onclick="window.location='/admin/codes/{{ c.id }}'">
+        <td><small class="text-muted">{{ c.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+        <td><code>{{ c.target_address }}</code></td>
+        <td><span class="badge text-bg-light fs-6">{{ c.code }}</span></td>
+        <td>{% if c.platform %}<span class="badge text-bg-info">{{ c.platform }}</span>{% endif %}</td>
+        <td><small>{{ (c.sender or '')[:40] }}</small></td>
+        <td><small>{{ (c.subject or '')[:60] }}</small></td>
+        <td>
+          {% if c.consumed_at %}
+            <span class="badge text-bg-secondary">consumed</span>
+          {% else %}
+            <span class="badge text-bg-success">unused</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="text-center text-muted py-4">No codes match the filter</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total > page_size %}
+<nav>
+  <ul class="pagination pagination-sm">
+    {% if page > 1 %}
+      <li class="page-item"><a class="page-link" href="?page={{ page - 1 }}&target={{ filters.target }}&platform={{ filters.platform }}&consumed={{ filters.consumed }}">←</a></li>
+    {% endif %}
+    <li class="page-item disabled"><span class="page-link">Page {{ page }} of {{ (total // page_size) + 1 }}</span></li>
+    {% if page * page_size < total %}
+      <li class="page-item"><a class="page-link" href="?page={{ page + 1 }}&target={{ filters.target }}&platform={{ filters.platform }}&consumed={{ filters.consumed }}">→</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endif %}
+{% endblock %}

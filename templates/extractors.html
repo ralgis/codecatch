@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Extractors — codecatch{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Code extractor patterns</h2>
+  <a href="/admin/extractors/playground" class="btn btn-sm btn-primary">
+    <i class="bi bi-bug"></i> Playground
+  </a>
+</div>
+<p class="text-muted small">
+  Each incoming email is matched against these regex patterns in priority order
+  (lower priority = checked first). First match wins and the captured code is stored.
+</p>
+
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead>
+      <tr><th>Prio</th><th>Platform</th><th>Name</th><th>Sender match</th><th>Subject match</th><th>Code pattern</th><th>Search</th><th>Active</th><th>Builtin</th></tr>
+    </thead>
+    <tbody>
+      {% for e in extractors %}
+      <tr>
+        <td>{{ e.priority }}</td>
+        <td><span class="badge text-bg-info">{{ e.platform }}</span></td>
+        <td><small>{{ e.name }}</small></td>
+        <td><small><code>{{ (e.sender_pattern or '—')[:50] }}</code></small></td>
+        <td><small><code>{{ (e.subject_pattern or '—')[:30] }}</code></small></td>
+        <td><small><code>{{ e.code_pattern[:50] }}</code></small></td>
+        <td><small>{{ e.search_in }}</small></td>
+        <td>{% if e.is_active %}<i class="bi bi-check-circle text-success"></i>{% endif %}</td>
+        <td>{% if e.is_builtin %}<i class="bi bi-shield-check text-warning"></i>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="text-muted small mt-3">
+  <i class="bi bi-info-circle"></i>
+  Custom pattern CRUD via UI is v1.1. For now, edit the <code>extractor_patterns</code>
+  table directly. Use the Playground to test before committing.
+</p>
+{% endblock %}

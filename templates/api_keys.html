@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}API keys — codecatch{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">API keys</h2>
+  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newKeyModal">
+    + Create key
+  </button>
+</div>
+
+{% if new_token %}
+<div class="alert alert-warning">
+  <strong>New API key created.</strong> Save it now — you won't see it again:
+  <div class="mt-2">
+    <code class="user-select-all">{{ new_token }}</code>
+    <button class="btn btn-sm btn-outline-secondary ms-2"
+            onclick="navigator.clipboard.writeText('{{ new_token }}')">Copy</button>
+  </div>
+</div>
+{% endif %}
+
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Prefix</th>
+        <th>Scope</th>
+        {% if admin.is_super_admin %}<th>Tenant</th>{% endif %}
+        <th>Created</th>
+        <th>Last used</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for k in keys %}
+      <tr>
+        <td>{{ k.name }}</td>
+        <td><small><code>{{ k.key_prefix }}…</code></small></td>
+        <td>
+          {% if k.is_admin_scope %}<span class="badge text-bg-warning">admin</span>
+          {% else %}<span class="badge text-bg-secondary">normal</span>{% endif %}
+        </td>
+        {% if admin.is_super_admin %}<td><small>{{ k.tenant_slug }}</small></td>{% endif %}
+        <td><small>{{ k.created_at.strftime('%Y-%m-%d') }}</small></td>
+        <td><small>{{ k.last_used_at.strftime('%Y-%m-%d %H:%M') if k.last_used_at else '—' }}</small></td>
+        <td>
+          {% if k.is_active %}<span class="badge text-bg-success">active</span>
+          {% else %}<span class="badge text-bg-secondary">revoked</span>{% endif %}
+        </td>
+        <td>
+          {% if k.is_active %}
+          <form method="post" action="/admin/api-keys/{{ k.id }}/revoke" class="d-inline"
+                onsubmit="return confirm('Revoke this key? Clients using it will start getting 401.')">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="text-center text-muted py-4">No API keys yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal fade" id="newKeyModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/admin/api-keys/new" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">New API key</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Name</label>
+          <input type="text" name="name" class="form-control" required
+                 placeholder="audiotrace-scraper / manual-testing / ...">
+        </div>
+        <div class="form-check">
+          <input type="checkbox" name="is_admin_scope" id="is_admin_scope" class="form-check-input">
+          <label class="form-check-label" for="is_admin_scope">
+            <strong>Admin scope</strong> — can manage tenant resources (mailboxes, addresses)
+            via API, not just read codes
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

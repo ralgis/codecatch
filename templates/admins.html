@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Admins — codecatch{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Admin users</h2>
+  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newAdminModal">
+    + Add admin
+  </button>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead><tr><th>Username</th><th>Role</th><th>Tenant</th><th>Created</th><th>Last login</th><th>Active</th><th></th></tr></thead>
+    <tbody>
+      {% for a in admins %}
+      <tr>
+        <td>{{ a.username }}</td>
+        <td>
+          {% if a.is_super_admin %}<span class="badge text-bg-warning">super</span>
+          {% else %}<span class="badge text-bg-info">tenant</span>{% endif %}
+        </td>
+        <td>{{ a.tenant_slug or '—' }}</td>
+        <td><small>{{ a.created_at.strftime('%Y-%m-%d') }}</small></td>
+        <td><small>{{ a.last_login_at.strftime('%Y-%m-%d %H:%M') if a.last_login_at else '—' }}</small></td>
+        <td>{% if a.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
+        <td>
+          {% if a.is_active and a.id != admin.id %}
+          <form method="post" action="/admin/admins/{{ a.id }}/deactivate" class="d-inline"
+                onsubmit="return confirm('Deactivate {{ a.username }}?')">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x"></i></button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal fade" id="newAdminModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/admin/admins/new" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">New admin</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Username</label>
+          <input type="text" name="username" class="form-control" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input type="password" name="password" class="form-control" required minlength="8">
+        </div>
+        <div class="form-check mb-3">
+          <input type="checkbox" name="is_super" id="is_super" class="form-check-input">
+          <label class="form-check-label" for="is_super">Super-admin (sees all tenants)</label>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Tenant <small class="text-muted">(required for tenant-admins)</small></label>
+          <select name="tenant_id" class="form-select">
+            <option value="">— pick if not super —</option>
+            {% for t in tenants %}<option value="{{ t.id }}">{{ t.slug }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

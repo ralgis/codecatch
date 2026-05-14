@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Login — codecatch{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-4 col-lg-3 mt-5">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title mb-4 text-center">
+          <i class="bi bi-envelope-arrow-down"></i> codecatch
+        </h5>
+        {% if error %}
+          <div class="alert alert-danger py-2 small">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/login">
+          <div class="mb-3">
+            <label class="form-label small">Username</label>
+            <input type="text" name="username" class="form-control" autofocus required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small">Password</label>
+            <input type="password" name="password" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-primary w-100">
+            <i class="bi bi-box-arrow-in-right"></i> Log in
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

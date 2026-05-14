@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Code {{ code.id }} — codecatch{% endblock %}
+{% block content %}
+<a href="/admin/codes" class="btn btn-sm btn-outline-secondary mb-3">← Back to codes</a>
+<h2 class="mb-3">Code <span class="badge text-bg-light fs-4">{{ code.code }}</span></h2>
+
+<dl class="row">
+  <dt class="col-sm-3">Target</dt><dd class="col-sm-9"><code>{{ code.target_address }}</code></dd>
+  <dt class="col-sm-3">From</dt><dd class="col-sm-9">{{ code.sender }}</dd>
+  <dt class="col-sm-3">Subject</dt><dd class="col-sm-9">{{ code.subject }}</dd>
+  <dt class="col-sm-3">Platform</dt><dd class="col-sm-9">{{ code.platform or '—' }}</dd>
+  <dt class="col-sm-3">Received</dt><dd class="col-sm-9">{{ code.received_at }}</dd>
+  <dt class="col-sm-3">Source mailbox</dt><dd class="col-sm-9">{{ code.source_mailbox or '—' }}</dd>
+  <dt class="col-sm-3">Message-ID</dt><dd class="col-sm-9"><small><code>{{ code.message_id or '—' }}</code></small></dd>
+  <dt class="col-sm-3">Status</dt>
+  <dd class="col-sm-9">
+    {% if code.consumed_at %}
+      <span class="badge text-bg-secondary">consumed at {{ code.consumed_at }}</span>
+      {% if code.consumed_note %}<small class="text-muted ms-2">{{ code.consumed_note }}</small>{% endif %}
+    {% else %}
+      <span class="badge text-bg-success">unused</span>
+      <form method="post" action="/admin/codes/{{ code.id }}/consume" class="d-inline ms-2">
+        <button class="btn btn-sm btn-outline-secondary">Mark consumed</button>
+      </form>
+    {% endif %}
+  </dd>
+</dl>
+
+<h5 class="mt-4">Body excerpt</h5>
+<pre class="body-excerpt bg-body-tertiary p-3 rounded">{{ code.body_excerpt or '(empty)' }}</pre>
+{% endblock %}

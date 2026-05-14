@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Tenants — codecatch{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2 class="mb-0">Tenants</h2>
+  <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newTenantModal">
+    + Add tenant
+  </button>
+</div>
+<p class="text-muted small">
+  A tenant is an isolated owner of data: mailboxes, codes, API keys are scoped to one tenant.
+  Mailbox groups are global (shared across tenants) — codes get routed to whoever owns the target address.
+</p>
+
+<div class="table-responsive">
+  <table class="table table-sm">
+    <thead>
+      <tr><th>ID</th><th>Slug</th><th>Name</th><th>Mailboxes</th><th>Codes</th><th>API keys</th><th>Created</th><th>Active</th></tr>
+    </thead>
+    <tbody>
+      {% for t in tenants %}
+      <tr>
+        <td>{{ t.id }}</td>
+        <td><code>{{ t.slug }}</code></td>
+        <td>{{ t.name }}</td>
+        <td>{{ t.mailbox_count }}</td>
+        <td>{{ t.code_count }}</td>
+        <td>{{ t.key_count }}</td>
+        <td><small>{{ t.created_at.strftime('%Y-%m-%d') }}</small></td>
+        <td>{% if t.is_active %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="modal fade" id="newTenantModal" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="post" action="/admin/tenants/new" class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">New tenant</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Slug</label>
+          <input type="text" name="slug" class="form-control" pattern="[a-z0-9-]+" required
+                 placeholder="acme-corp">
+          <small class="form-text text-muted">Lowercase, alphanumeric + hyphens</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Display name</label>
+          <input type="text" name="name" class="form-control" required placeholder="Acme Corp">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

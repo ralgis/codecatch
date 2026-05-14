@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Metrics — codecatch{% endblock %}
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+{% endblock %}
+{% block content %}
+<h2 class="mb-4">Metrics</h2>
+
+<div class="row g-3">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">Codes received per hour <small class="text-muted">(last 24h)</small></div>
+      <div class="card-body">
+        <div id="chart-per-hour" style="height: 300px;"></div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">Codes by platform <small class="text-muted">(last 7d)</small></div>
+      <div class="card-body">
+        <div id="chart-by-platform" style="height: 300px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const perHour = {{ per_hour_json | safe }};
+  const byPlatform = {{ by_platform_json | safe }};
+
+  Plotly.newPlot('chart-per-hour', [{
+    x: perHour.map(p => p.hour),
+    y: perHour.map(p => p.n),
+    type: 'bar',
+    marker: { color: '#3b82f6' },
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: '#cbd5e1' },
+    margin: { t: 10, l: 40, r: 10, b: 40 },
+    yaxis: { gridcolor: '#334155' },
+    xaxis: { gridcolor: '#334155' },
+  }, {displayModeBar: false, responsive: true});
+
+  Plotly.newPlot('chart-by-platform', [{
+    labels: byPlatform.map(p => p.platform),
+    values: byPlatform.map(p => p.n),
+    type: 'pie',
+    hole: 0.4,
+  }], {
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    font: { color: '#cbd5e1' },
+    margin: { t: 10, l: 10, r: 10, b: 10 },
+    showlegend: true,
+    legend: { orientation: 'h', y: -0.1 },
+  }, {displayModeBar: false, responsive: true});
+</script>
+{% endblock %}

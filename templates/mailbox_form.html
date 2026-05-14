@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{% if mailbox %}Edit{% else %}Add{% endif %} mailbox — codecatch{% endblock %}
+{% block content %}
+<a href="/admin/mailboxes" class="btn btn-sm btn-outline-secondary mb-3">← Back</a>
+<h2 class="mb-4">{% if mailbox %}Edit{% else %}Add{% endif %} mailbox</h2>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<form method="post" action="/admin/mailboxes/new" class="col-md-8">
+  <div class="mb-3">
+    <label class="form-label">Email address</label>
+    <input type="email" name="address" class="form-control" required
+           value="{{ mailbox.address if mailbox else '' }}"
+           {% if mailbox %}readonly{% endif %}>
+    <small class="form-text text-muted">
+      Provider detected automatically by domain. Configure new providers under
+      <a href="/admin/providers">Providers</a> if needed.
+    </small>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Password</label>
+    <input type="password" name="password" class="form-control"
+           {% if not mailbox %}required{% endif %}
+           placeholder="{% if mailbox %}Leave empty to keep current{% else %}Mailbox password{% endif %}">
+    <small class="form-text text-muted">
+      Stored encrypted (reversible Fernet). For OAuth providers (Gmail/Outlook) the
+      password is used during headless consent attempt.
+    </small>
+  </div>
+  <div class="mb-3 form-check">
+    <input type="checkbox" name="is_group" id="is_group" class="form-check-input"
+           {% if mailbox and mailbox.is_group %}checked{% endif %}>
+    <label class="form-check-label" for="is_group">
+      <strong>Group inbox</strong> — receives forwarded mail for other addresses
+    </label>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Purpose <span class="text-muted small">(optional)</span></label>
+    <input type="text" name="purpose" class="form-control"
+           placeholder="ig_signup / tt_signup / ..."
+           value="{{ mailbox.purpose if mailbox else '' }}">
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Notes <span class="text-muted small">(optional)</span></label>
+    <textarea name="notes" class="form-control" rows="2">{{ mailbox.notes if mailbox else '' }}</textarea>
+  </div>
+  <button type="submit" class="btn btn-primary">
+    {% if mailbox %}Save{% else %}Create{% endif %}
+  </button>
+  <a href="/admin/mailboxes" class="btn btn-outline-secondary">Cancel</a>
+</form>
+
+<details class="mt-4">
+  <summary class="text-muted small">Available providers ({{ providers | length }})</summary>
+  <table class="table table-sm mt-2">
+    <thead><tr><th>Name</th><th>Auth</th><th>Domains</th></tr></thead>
+    <tbody>
+      {% for p in providers %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td><span class="badge text-bg-secondary">{{ p.auth_kind }}</span></td>
+        <td><small><code>{{ p.domain_patterns | join(', ') }}</code></small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ mailbox.address }} — codecatch{% endblock %}
+{% block content %}
+<a href="/admin/mailboxes" class="btn btn-sm btn-outline-secondary mb-3">← Back to mailboxes</a>
+<h2 class="mb-3">
+  <code>{{ mailbox.address }}</code>
+  {% if mailbox.is_group %}<span class="badge text-bg-warning ms-2">group</span>{% endif %}
+</h2>
+
+<div class="row g-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Details</div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-4">Provider</dt><dd class="col-8">{{ mailbox.provider_name or '—' }} <small class="text-muted">({{ mailbox.provider_auth_kind or '—' }})</small></dd>
+          <dt class="col-4">Status</dt><dd class="col-8"><span class="badge text-bg-secondary">{{ mailbox.status | humanize_status }}</span></dd>
+          <dt class="col-4">Tenant</dt><dd class="col-8">{{ mailbox.tenant_slug }}</dd>
+          <dt class="col-4">Purpose</dt><dd class="col-8">{{ mailbox.purpose or '—' }}</dd>
+          <dt class="col-4">Created</dt><dd class="col-8">{{ mailbox.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
+          <dt class="col-4">Last code</dt><dd class="col-8">{{ mailbox.last_code_at.strftime('%Y-%m-%d %H:%M') if mailbox.last_code_at else '—' }}</dd>
+          <dt class="col-4">Last error</dt><dd class="col-8"><small class="text-danger">{{ mailbox.last_error or '—' }}</small></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Password history</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Created</th><th>Status</th><th>Reason</th></tr></thead>
+          <tbody>
+            {% for p in passwords %}
+            <tr>
+              <td><small>{{ p.created_at.strftime('%Y-%m-%d %H:%M') }}</small></td>
+              <td>
+                {% if p.is_current %}<span class="badge text-bg-success">current</span>
+                {% else %}<span class="badge text-bg-secondary">old</span>{% endif %}
+              </td>
+              <td><small class="text-muted">{{ p.invalidation_reason or '' }}</small></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-muted text-center py-2"><small>No stored password</small></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% if admin.is_super_admin and passwords %}
+      <div class="card-footer">
+        <button class="btn btn-sm btn-outline-warning"
+                onclick="revealPassword('{{ mailbox.address }}')">
+          <i class="bi bi-eye"></i> Reveal current
+        </button>
+        <span id="revealed-pw" class="ms-2 font-monospace text-warning"></span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<h5 class="mt-4">Recent codes</h5>
+<div class="table-responsive">
+  <table class="table table-hover table-sm">
+    <thead><tr><th>Received</th><th>Code</th><th>Platform</th><th>Sender</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for c in recent_codes %}
+      <tr onclick="window.location='/admin/codes/{{ c.id }}'">
+        <td><small>{{ c.received_at.strftime('%Y-%m-%d %H:%M:%S') }}</small></td>
+        <td><span class="badge text-bg-light fs-6">{{ c.code }}</span></td>
+        <td>{% if c.platform %}<span class="badge text-bg-info">{{ c.platform }}</span>{% endif %}</td>
+        <td><small>{{ (c.sender or '')[:40] }}</small></td>
+        <td>{% if c.consumed_at %}<span class="badge text-bg-secondary">consumed</span>{% else %}<span class="badge text-bg-success">unused</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-center text-muted py-4">No codes for this address yet</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<form method="post" action="/admin/mailboxes/{{ mailbox.address }}/delete"
+      onsubmit="return confirm('Delete this mailbox? This also removes its password history. Codes are kept.')">
+  <button class="btn btn-sm btn-outline-danger mt-3"><i class="bi bi-trash"></i> Delete mailbox</button>
+</form>
+
+{% if admin.is_super_admin %}
+<script>
+async function revealPassword(addr) {
+  const r = await fetch('/admin/mailboxes/' + encodeURIComponent(addr) + '/reveal-password', {method: 'POST'});
+  if (r.ok) {
+    const data = await r.json();
+    document.getElementById('revealed-pw').textContent = data.password;
+  } else {
+    alert('Reveal failed: ' + r.status);
+  }
+}
+</script>
+{% endif %}
+{% endblock %}
