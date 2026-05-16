@@ -40,8 +40,17 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SENTRY_DSN: ${SENTRY_DSN:-}
       CODE_RETENTION_DAYS: ${CODE_RETENTION_DAYS:-30}
-    ports:
-      - "${PORT:-8080}:8080"
+    networks:
+      - default
+      - traefik-proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.codecatch.rule=Host(`${PUBLIC_HOST:-codecatch.ralgis.space}`)"
+      - "traefik.http.routers.codecatch.entrypoints=websecure"
+      - "traefik.http.routers.codecatch.tls=true"
+      - "traefik.http.routers.codecatch.tls.certresolver=myresolver"
+      - "traefik.http.services.codecatch.loadbalancer.server.port=8080"
+      - "traefik.docker.network=${TRAEFIK_NETWORK:-traefik-proxy}"
 
   workers:
     build:
@@ -73,3 +82,9 @@ services:
 volumes:
   codecatch_pgdata:
   codecatch_pw_profiles:
+
+networks:
+  default:
+  traefik-proxy:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik-proxy}
